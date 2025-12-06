@@ -1,0 +1,14 @@
+{
+  "preferences": {
+    "quickEntryShortcut": {
+      "accelerator": "Alt+Space"
+    }
+  },
+  "mcpServers": {
+    "obsidian": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-obsidian-tools/dist/index.js", "/path/to/your/vault"]
+    }
+  }
+}
+
