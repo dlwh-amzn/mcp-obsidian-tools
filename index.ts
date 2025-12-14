@@ -526,6 +526,51 @@ function buildContentSnippet(
   return prefix + content.slice(start, end).trim() + suffix
 }
 
+/**
+ * Search for folders by name anywhere in the vault.
+ * Returns an array of relative paths to matching folders.
+ */
+async function findFoldersByName(folderName: string): Promise<string[]> {
+  const matches: string[] = []
+  const lowerName = folderName.toLowerCase()
+
+  for (const base of vaultDirectories) {
+    const stack: string[] = [base]
+
+    while (stack.length > 0) {
+      const current = stack.pop()!
+      let entries
+      try {
+        entries = await fs.readdir(current, { withFileTypes: true })
+      } catch {
+        continue
+      }
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue
+
+        const fullPath = path.join(current, entry.name)
+        try {
+          await validatePath(fullPath)
+        } catch {
+          continue
+        }
+
+        // Check if this folder matches the name (case-insensitive)
+        if (entry.name.toLowerCase() === lowerName) {
+          const relativePath = fullPath.replace(base, "").replace(/^[/\\]/, "")
+          matches.push(relativePath)
+        }
+
+        // Continue searching subdirectories
+        stack.push(fullPath)
+      }
+    }
+  }
+
+  return matches
+}
+
 // Tool handlers
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -609,8 +654,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         name: "obsidian_count_files",
         description:
           "Count the total number of markdown files (.md) in the Obsidian vault " +
-          "or a specific subfolder. Returns the total count and a breakdown by " +
-          "immediate subfolders. Set includeNames=true to also get a list of file names. " +
+          "or a specific subfolder. Supports folder name lookup - if a folder like 'History 101' " +
+          "isn't found at the root, automatically searches the entire vault for matching folders. " +
+          "Returns the total count and a breakdown by immediate subfolders. " +
+          "Set includeNames=true to also get a list of file names. " +
           "Useful for understanding vault size, organization, and listing files in a folder.",
         inputSchema: zodToJsonSchema(
           ObsidianCountFilesArgsSchema
@@ -1091,7 +1138,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
           )
         }
 
-        const targetFolder = parsed.data.folder || ""
+        let targetFolder = parsed.data.folder || ""
         const includeSubfolders = parsed.data.includeSubfolders !== false
         const includeNames = parsed.data.includeNames === true
 
@@ -1100,26 +1147,31 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
         const fileNames: string[] = []
         const MAX_FILE_NAMES = 100
 
+        // Resolve the actual folder path
+        let resolvedFolder = targetFolder
+        let folderFoundDirectly = false
+
         for (const base of vaultDirectories) {
-          const startPath = targetFolder 
+          const directPath = targetFolder 
             ? path.join(base, targetFolder) 
             : base
 
-          // Verify the path exists and is accessible
           try {
-            const stats = await fs.stat(startPath)
-            if (!stats.isDirectory()) {
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: `Error: "${targetFolder}" is not a directory.`,
-                  },
-                ],
-                isError: true,
-              }
+            const stats = await fs.stat(directPath)
+            if (stats.isDirectory()) {
+              folderFoundDirectly = true
+              break
             }
           } catch {
+            // Direct path not found, will try fuzzy search
+          }
+        }
+
+        // If folder not found directly and a folder name was provided, search by name
+        if (!folderFoundDirectly && targetFolder) {
+          const matchingFolders = await findFoldersByName(targetFolder)
+          
+          if (matchingFolders.length === 0) {
             return {
               content: [
                 {
@@ -1129,6 +1181,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
               ],
               isError: true,
             }
+          } else if (matchingFolders.length === 1) {
+            // Single match found - use it
+            resolvedFolder = matchingFolders[0]
+          } else {
+            // Multiple matches - ask user to clarify
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Multiple folders named "${targetFolder}" found:\n\n${matchingFolders.map(f => `  ${f}`).join('\n')}\n\nPlease specify the full path.`,
+                },
+              ],
+            }
+          }
+        }
+
+        for (const base of vaultDirectories) {
+          const startPath = resolvedFolder 
+            ? path.join(base, resolvedFolder) 
+            : base
+
+          // Verify the path exists and is accessible
+          try {
+            const stats = await fs.stat(startPath)
+            if (!stats.isDirectory()) {
+              continue
+            }
+          } catch {
+            continue
           }
 
           const stack: { path: string; depth: number }[] = [{ path: startPath, depth: 0 }]
@@ -1178,7 +1259,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
 
         // Build response
         const lines: string[] = []
-        const folderLabel = targetFolder || "vault"
+        const folderLabel = resolvedFolder || "vault"
+        
+        // Show if folder was resolved from a different input
+        if (resolvedFolder !== targetFolder && targetFolder) {
+          lines.push(`Found folder: ${resolvedFolder}`)
+        }
         lines.push(`Total files in ${folderLabel}: ${totalCount}`)
         
         if (Object.keys(folderCounts).length > 1 || (Object.keys(folderCounts).length === 1 && !folderCounts["(root)"])) {

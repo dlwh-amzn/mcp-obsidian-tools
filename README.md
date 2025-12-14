@@ -160,7 +160,7 @@ Once configured, the following MCP tools will be available:
 
 - **`obsidian_query`**: Natural-language query over the vault, with optional date filtering based on frontmatter dates (e.g. `created: YYYY-MM-DDTHH:MM:SS`).
 
-- **`obsidian_count_files`**: Count the total number of markdown files in the vault or a specific subfolder. Returns total count and breakdown by immediate subfolders. Set `includeNames: true` to also get a list of file names (up to 100). Useful for understanding vault size, organization, and listing files in a folder.
+- **`obsidian_count_files`**: Count the total number of markdown files in the vault or a specific subfolder. Supports fuzzy folder lookup - if a folder like "History 101" isn't at the root, automatically searches the entire vault for matching folders. Returns total count and breakdown by immediate subfolders. Set `includeNames: true` to also get a list of file names (up to 100). Useful for understanding vault size, organization, and listing files in a folder.
 
 All tools are **read-only** and are strictly confined to the vault directory (and its real/symlinked path) via path validation.
 
