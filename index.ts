@@ -127,6 +127,7 @@ async function validatePath(requestedPath: string): Promise<string> {
 // Schema definitions
 const ReadNotesArgsSchema = z.object({
   paths: z.array(z.string()),
+  headersOnly: z.boolean().optional().describe("When true, return only markdown headings (lines starting with #), not full content. Useful for quickly getting titles and structure."),
 })
 
 const SearchNotesArgsSchema = z.object({
@@ -581,6 +582,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "Read the contents of multiple notes within the Obsidian vault. " +
           "Each note's content is returned with its path as a reference. " +
           "Failed reads for individual notes won't stop the entire operation. " +
+          "Set headersOnly=true to return only headings (lines starting with #) for quick title/structure extraction. " +
           "Reading too many at once may result in an error.",
         inputSchema: zodToJsonSchema(ReadNotesArgsSchema) as ToolInput,
       },
@@ -679,13 +681,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
             `Invalid arguments for obsidian_read_notes: ${parsed.error}`
           )
         }
+        const { headersOnly } = parsed.data
         const results = await Promise.all(
           parsed.data.paths.map(async (filePath: string) => {
             try {
               const validPath = await validatePath(
                 path.join(vaultDirectories[0], filePath)
               )
-              const content = await fs.readFile(validPath, "utf-8")
+              let content = await fs.readFile(validPath, "utf-8")
+              if (headersOnly) {
+                const hdrs = content.split("\n").filter(l => l.match(/^#+\s/)).join("\n")
+                content = hdrs || "(no headings found)"
+              }
               return `${filePath}:\n${content}\n`
             } catch (error) {
               const errorMessage =

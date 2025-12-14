@@ -146,7 +146,7 @@ Once configured, the following MCP tools will be available:
 
 - **`obsidian_search_notes`**: Search for notes by filename (case-insensitive, supports simple regex / wildcards). Returns relative paths of matching `.md` files.
 
-- **`obsidian_read_notes`**: Read the contents of multiple notes by relative path. Each note is returned with its path header; failures are reported per-note.
+- **`obsidian_read_notes`**: Read the contents of multiple notes by relative path. Each note is returned with its path header; failures are reported per-note. Set `headersOnly: true` to return only headings (lines starting with `#`) for quick title/structure extraction.
 
 - **`obsidian_list_tags`**: Scan all Markdown files and list all tags (frontmatter `tags` and inline `#tags`) with occurrence counts. Optional `startsWith` filter.
 
