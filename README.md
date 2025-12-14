@@ -189,6 +189,20 @@ All tools are **read-only** and are strictly confined to the vault directory (an
 - **Check vault permissions**: Ensure you have read access to the vault directory
 - **Check server permissions**: Ensure the `dist/index.js` file is executable (`chmod +x dist/index.js`)
 
+### Model Compatibility
+
+Tool-calling quality depends on your LLM. Some models (especially smaller ones) may struggle to format correct parameters for MCP tools, particularly with:
+- Complex natural language queries
+- Non-English input
+- Multiple parameters
+
+If you encounter unexpected errors, try:
+1. Simplifying your query
+2. Using a larger/more capable model (i.e., Sonnet vs Haiku)
+3. Checking that your MCP client is in the correct mode (i.e., Agent or Plan Mode in Cursor)
+
+**Note:** Complex cross-referencing queries (e.g., "How does X relate to Y across my vault?") may require 10-30+ tool calls as the model iterates through different search strategies. This is normal behavior, not a failure.
+
 ## Development
 
 To watch for changes during development:
